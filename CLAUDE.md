@@ -208,3 +208,10 @@ Wait for consent; never auto-create ADRs. Group related decisions (stacks, authe
 
 ## Code Standards
 See `.specify/memory/constitution.md` for code quality, testing, performance, security, and architecture principles.
+
+## Active Technologies
+- Python 3.13+ + watchdog (filesystem events), subprocess (Claude invocation), pathlib (file operations), argparse (CLI) (001-bronze-vault-setup)
+- Local filesystem (Obsidian Markdown vault at user-chosen path) (001-bronze-vault-setup)
+
+## Recent Changes
+- 001-bronze-vault-setup: Added Python 3.13+ + watchdog (filesystem events), subprocess (Claude invocation), pathlib (file operations), argparse (CLI)
