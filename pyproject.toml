@@ -1,0 +1,23 @@
+[project]
+name = "digital-fte"
+version = "0.1.0"
+description = "Personal AI Employee — local-first autonomous agent powered by Claude Code and Obsidian"
+requires-python = ">=3.13"
+dependencies = [
+    "watchdog>=6.0",
+]
+
+[project.scripts]
+fte = "fte.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+]
+
+[build-system]
+requires = ["setuptools>=75.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
