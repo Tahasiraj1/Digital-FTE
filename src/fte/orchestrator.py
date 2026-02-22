@@ -64,16 +64,29 @@ def invoke_claude(vault_path: Path, files: list[Path]) -> bool:
 
     Returns True on success, False on failure.
     """
+    import os
+
     file_list = "\n".join(f"- {f.name}" for f in files)
     prompt = PROMPT_TEMPLATE.format(file_list=file_list)
+
+    # Strip CLAUDECODE env var so nested Claude sessions are allowed.
+    # Claude Code blocks nested invocations when this var is set.
+    env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
 
     start = time.monotonic()
     try:
         result = subprocess.run(
-            ["claude", "-p", prompt, "--cwd", str(vault_path)],
+            [
+                "claude",
+                "-p", prompt,
+                "--add-dir", str(vault_path),
+                "--dangerously-skip-permissions",
+            ],
             capture_output=True,
             text=True,
             timeout=CLAUDE_TIMEOUT_S,
+            env=env,
+            cwd=str(vault_path),
         )
         duration = int((time.monotonic() - start) * 1000)
 
