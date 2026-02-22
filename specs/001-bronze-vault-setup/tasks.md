@@ -3,7 +3,7 @@
 **Input**: Design documents from `/specs/001-bronze-vault-setup/`
 **Prerequisites**: plan.md (required), spec.md (required), research.md, data-model.md, contracts/cli-interface.md
 
-**Tests**: Not explicitly requested in the feature specification. Test files are defined in plan.md for future use but test tasks are excluded from this task list.
+**Tests**: Added post-implementation via Phase 8 (see below). 45 unit tests + live E2E verification.
 
 **Organization**: Tasks are grouped by user story to enable independent implementation and testing of each story.
 
@@ -170,6 +170,24 @@
 ### Sequential Execution (Solo Developer)
 
 T001 → T002+T003 → T004+T005 → T006 → T007 → T008 → T009 → T010 → T011 → T012 → T013 → T014 → T015 → T016 → T017 → T018 → T019+T020
+
+---
+
+## Phase 8: Testing & E2E Verification (Added Post-Implementation)
+
+**Purpose**: Unit tests for all 5 modules + live E2E verification of Claude invocation
+
+- [x] T021 Write conftest.py with shared fixtures — `vault` fixture (tmp_path + init_vault) and `needs_action_file` fixture at tests/conftest.py
+- [x] T022 [P] Write 8 unit tests for src/fte/vault.py at tests/test_vault.py — covers: creates all required dirs, creates handbook, creates dashboard, idempotent on rerun, returns status tuples, existing items report "exists", creates nested vault root, logs vault_init action
+- [x] T023 [P] Write 9 unit tests for src/fte/logger.py at tests/test_logger.py — covers: creates log file, valid JSON, required fields, ISO UTC timestamp, multiple entries appended, JSONL parseable, creates Logs/ dir, error fields, never raises on bad path
+- [x] T024 [P] Write 7 unit tests for src/fte/lockfile.py at tests/test_lockfile.py — covers: creates lockfile, contains PID, release removes, raises on live lock, stale lock overwritten, release idempotent, returns lock path
+- [x] T025 [P] Write 7 unit tests for src/fte/watcher.py at tests/test_watcher.py — covers: timestamp prefix, preserves content, source removed, logs action, non-markdown files, multiple files, error on missing source logged
+- [x] T026 [P] Write 14 unit tests for src/fte/orchestrator.py at tests/test_orchestrator.py — covers: _list_needs_action (empty, files, sorted, ignores dirs, missing dir), _move_to_in_progress (moves, logs, multiple files), invoke_claude (success, prompt mentions files, not found, nonzero exit, timeout, logs success)
+- [x] T027 Fix orchestrator.py: strip CLAUDECODE env var — Claude Code sets this env var; subprocess claude invocation fails inside a running Claude session. Strip before calling subprocess.run()
+- [x] T028 Fix orchestrator.py: replace invalid --cwd flag — --cwd is not a valid Claude CLI flag. Replace with cwd= subprocess param + --add-dir + --dangerously-skip-permissions flags
+- [x] T029 Live E2E test — run `fte orchestrate` (no --dry-run) with real task files in Needs_Action/, verify Claude writes PLAN-*.md files to Plans/, task files move to In_Progress/, all JSONL log entries correct
+
+**Checkpoint**: All 45 tests pass in < 2s. E2E produces plan files with correct frontmatter. All JSONL entries valid.
 
 ---
 
