@@ -30,5 +30,21 @@ Thumbs.db
 *.lock
 Logs/
 
+# Node.js (WhatsApp watcher)
+src/fte/whatsapp/node_modules/
+src/fte/whatsapp/watcher-state.json
+src/fte/whatsapp/.wwebjs_auth/
+src/fte/whatsapp/.wwebjs_cache/
+
+# Silver runtime state (not committed)
+src/mcp_servers/**/__pycache__/
+*.linkedin_token.json
+watcher-state.json
+
+# OAuth credentials (never commit)
+credentials.json
+client_secrets.json
+*_token.json
+
 # Specify
 .specify/scripts/

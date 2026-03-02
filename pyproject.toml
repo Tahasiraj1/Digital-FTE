@@ -5,10 +5,19 @@ description = "Personal AI Employee — local-first autonomous agent powered by 
 requires-python = ">=3.13"
 dependencies = [
     "watchdog>=6.0",
+    "google-api-python-client>=2.150",
+    "google-auth-oauthlib>=1.2",
+    "google-auth-httplib2>=0.2",
+    "mcp[cli]>=1.4",
+    "httpx>=0.27",
+    "python-frontmatter>=1.1",
+    "anthropic>=0.40",
 ]
 
 [project.scripts]
 fte = "fte.cli:main"
+fte-gmail-mcp = "mcp_servers.gmail.main:main"
+fte-calendar-mcp = "mcp_servers.calendar.main:main"
 
 [dependency-groups]
 dev = [
@@ -21,3 +30,4 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+include = ["fte*", "mcp_servers*"]

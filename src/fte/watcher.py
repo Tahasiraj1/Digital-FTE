@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from watchdog.events import FileSystemEventHandler
-from watchdog.observers import Observer
+from watchdog.observers.polling import PollingObserver
 
 from fte.lockfile import acquire_lock, release_lock
 from fte.logger import log_action
@@ -97,7 +97,7 @@ def run_watcher(vault_path: Path, *, interval: int = 5) -> None:
         sys.exit(1)
 
     handler = InboxHandler(vault_path)
-    observer = Observer()
+    observer = PollingObserver(timeout=interval)
     observer.schedule(handler, str(inbox), recursive=False)
 
     shutdown_requested = False
