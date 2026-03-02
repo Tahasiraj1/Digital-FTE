@@ -1,0 +1,11 @@
+"""Gmail MCP server entrypoint."""
+
+from mcp_servers.gmail.server import mcp
+
+
+def main() -> None:
+    mcp.run()
+
+
+if __name__ == "__main__":
+    main()

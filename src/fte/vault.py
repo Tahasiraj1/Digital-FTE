@@ -27,19 +27,33 @@ COMPANY_HANDBOOK_CONTENT = """\
 
 ## Rules of Engagement
 
-- [Add your rules here, e.g., "Always be polite in responses"]
-- [e.g., "Flag any payment over $500 for my approval"]
+All outbound actions require explicit human approval. No auto-approve thresholds active.
+
+### Email Rules
+- All email replies require approval regardless of sender
+- Replies to unknown senders MUST include `unknown_sender` in the approval file `flags` field
+- Maximum 10 emails per hour
+
+### LinkedIn Rules
+- All posts require approval. Maximum 10 posts per day.
+- Posts must not contain specific pricing or legal commitments without flagging `requires_human_review`
+
+### Calendar Rules
+- All calendar event creation requires approval
+- Default timezone: Asia/Karachi (PKT, UTC+5)
+
+### General Rules
+- Never execute an action without an approved file in `Vault/Approved/`
+- All actions are logged to `Vault/Logs/YYYY-MM-DD.json`
 
 ## Auto-Approve Thresholds
 
-- Payments: $0 (all payments require approval)
-- Emails to known contacts: require approval
-- Emails to unknown contacts: require approval
+- All actions: NEVER (always require approval)
 
 ## Business Context
 
-- [Describe your business for Claude's reference]
-- [e.g., "I run a freelance web development consultancy"]
+- [Describe your business here for Claude's reference]
+- [e.g., "I run an AI consulting business serving SMEs"]
 """
 
 DASHBOARD_CONTENT = """\
