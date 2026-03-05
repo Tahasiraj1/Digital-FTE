@@ -1,0 +1,19 @@
+{
+  "name": "fte-whatsapp-watcher",
+  "version": "1.0.0",
+  "description": "FTE WhatsApp watcher daemon — monitors incoming messages and creates task files",
+  "type": "module",
+  "main": "watcher.js",
+  "scripts": {
+    "start": "node watcher.js",
+    "start:dev": "DEV_MODE=true node watcher.js"
+  },
+  "dependencies": {
+    "whatsapp-web.js": "^1.26.0",
+    "qrcode-terminal": "^0.12.0",
+    "fs-extra": "^11.2.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

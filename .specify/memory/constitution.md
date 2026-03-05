@@ -145,10 +145,22 @@ Platinum). Each tier builds on the previous. Development MUST:
   `/Inbox`, `/Needs_Action`, `/Plans`, `/Pending_Approval`, `/Approved`,
   `/Rejected`, `/Done`, `/Logs`, `/In_Progress`
 
-**Gold/Platinum additions (deferred until tier confirmed):**
-- Odoo Community (self-hosted) for accounting/ERP
-- Cloud VM deployment (Oracle Free Tier / AWS)
-- Git-based vault sync between local and cloud agents
+**Gold additions:**
+- Odoo Community (self-hosted, local Docker) for accounting/ERP
+- Facebook + Instagram via browser automation (agent-browser by Vercel Labs)
+- Ralph Wiggum loop with continuation-task pattern for multi-step chains
+
+**Platinum additions:**
+- Cloud VM deployment (Oracle Free Tier / AWS) for 24/7 always-on operation
+- **Obsidian Headless Sync** (`npm install -g obsidian-headless`) for vault
+  sync between local WSL2 and cloud VM — replaces Git-based sync.
+  Requires Obsidian Sync subscription. Secrets (tokens, sessions, .env)
+  MUST be excluded from sync via `.syncignore` or equivalent.
+  Researched 2026-03-02: chosen over Git-based sync because it is
+  end-to-end encrypted, designed for agentic access, and requires no
+  manual conflict resolution. Revisit if Obsidian Sync pricing changes.
+  ⚠ REMINDER: Brief Taha on Headless Sync setup at the start of
+  Platinum tier before any cloud VM work begins.
 
 ## Development Workflow
 
@@ -196,4 +208,4 @@ Check section verifying alignment with these principles.
 scope becomes clearer through iteration. Principles marked as
 NON-NEGOTIABLE require MAJOR version bump to modify.
 
-**Version**: 1.0.0 | **Ratified**: 2026-02-20 | **Last Amended**: 2026-02-20
+**Version**: 1.1.0 | **Ratified**: 2026-02-20 | **Last Amended**: 2026-03-02

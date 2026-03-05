@@ -251,11 +251,21 @@ def _get_task_type(task_file: Path) -> str:
 # Silver skill routing — route files to appropriate skill prompts
 # ---------------------------------------------------------------------------
 
+def _is_ralph_loop_task(task_file: Path) -> bool:
+    """Check if a task file has ralph_loop: true in frontmatter."""
+    try:
+        post = frontmatter.load(str(task_file))
+        return bool(post.get("ralph_loop", False))
+    except Exception:
+        return False
+
+
 def _route_files(vault_path: Path, files: list[Path]) -> dict[str, list[Path]]:
     """Split files into routing groups based on their type/content.
 
     Returns:
         {
+          "ralph_loop": [...],
           "email": [...],
           "whatsapp": [...],
           "calendar": [...],
@@ -264,6 +274,7 @@ def _route_files(vault_path: Path, files: list[Path]) -> dict[str, list[Path]]:
         }
     """
     routes: dict[str, list[Path]] = {
+        "ralph_loop": [],
         "email": [],
         "whatsapp": [],
         "calendar": [],
@@ -273,7 +284,10 @@ def _route_files(vault_path: Path, files: list[Path]) -> dict[str, list[Path]]:
 
     for f in files:
         task_type = _get_task_type(f)
-        if task_type == "email":
+        # Gold: Ralph Loop tasks take priority
+        if _is_ralph_loop_task(f):
+            routes["ralph_loop"].append(f)
+        elif task_type == "email":
             routes["email"].append(f)
         elif task_type == "whatsapp_message":
             routes["whatsapp"].append(f)
@@ -368,6 +382,181 @@ def _invoke_claude_with_prompt(
 
 
 
+def _invoke_claude_ralph(
+    vault_path: Path,
+    files: list[Path],
+    loop_id: str | None = None,
+) -> bool:
+    """Invoke Claude Code in Ralph Loop mode for multi-step autonomous tasks.
+
+    Writes ralph_state.json before invocation. The Stop hook
+    (scripts/ralph-loop.sh) handles continuation logic.
+    """
+    from fte.ralph_loop import create_state_for_task, write_state
+
+    # Process one Ralph task at a time (single active loop)
+    task_file = files[0]
+    state = create_state_for_task(vault_path, task_file)
+    if loop_id:
+        state.loop_id = loop_id
+    write_state(vault_path, state)
+
+    # Build the prompt for the Ralph Loop skill
+    task_type = _get_task_type(task_file)
+    prompt = (
+        f"You are the FTE autonomous employee running in Ralph Loop mode. "
+        f"Read the task file '{task_file.name}' in Needs_Action/ and execute it.\n\n"
+        f"Task type: {task_type}\n"
+        f"Loop ID: {state.loop_id}\n\n"
+        f"IMPORTANT:\n"
+        f"- If a step requires human approval, write an approval file to Pending_Approval/ "
+        f"and output <promise>AWAITING_APPROVAL</promise> as the LAST line.\n"
+        f"- If the task is fully complete, move the task file to Done/ "
+        f"and output <promise>TASK_COMPLETE</promise> as the LAST line.\n"
+        f"- Reference Company_Handbook.md for business rules.\n"
+    )
+
+    env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
+    start = time.monotonic()
+    try:
+        cmd = [
+            "claude",
+            "-p", prompt,
+            "--add-dir", str(vault_path / "Needs_Action"),
+            "--add-dir", str(vault_path / "Plans"),
+            "--mcp-config", str(Path(__file__).resolve().parents[2] / ".mcp.json"),
+            "--dangerously-skip-permissions",
+        ]
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=CLAUDE_TIMEOUT_S,
+            env=env,
+            cwd=str(vault_path),
+        )
+        duration = int((time.monotonic() - start) * 1000)
+
+        log_action(
+            vault_path,
+            action_type="ralph_loop_iteration",
+            actor="claude",
+            parameters={
+                "loop_id": state.loop_id,
+                "task_file": state.task_file,
+                "iteration": state.iteration,
+            },
+            result="success" if result.returncode == 0 else "error",
+            error_message=result.stderr[:500] if result.returncode != 0 else None,
+            duration_ms=duration,
+        )
+        return result.returncode == 0
+
+    except FileNotFoundError:
+        log_action(
+            vault_path,
+            action_type="error",
+            actor="orchestrator",
+            result="error",
+            error_message="Claude Code CLI not found.",
+        )
+        return False
+
+    except subprocess.TimeoutExpired:
+        log_action(
+            vault_path,
+            action_type="error",
+            actor="orchestrator",
+            result="error",
+            error_message=f"Ralph Loop Claude timed out after {CLAUDE_TIMEOUT_S}s",
+        )
+        return False
+
+
+def _check_briefing_schedule(vault_path: Path) -> bool:
+    """Check if a CEO briefing is due. Returns True if a briefing task was created.
+
+    Reads Vault/briefing_state.json, computes next scheduled time, and drops
+    a CEO_BRIEFING_<date>.md into Needs_Action/ if due. Updates last_run.
+    """
+    state_file = vault_path / "briefing_state.json"
+    if not state_file.exists():
+        return False
+
+    try:
+        state = json.loads(state_file.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return False
+
+    last_run_raw = state.get("last_run")
+    weekday = state.get("schedule_utc_weekday", 6)  # 0=Mon, 6=Sun
+    hour = state.get("schedule_utc_hour", 18)
+    minute = state.get("schedule_utc_minute", 0)
+
+    now = datetime.now(timezone.utc)
+
+    # Parse last_run (or treat as epoch if null)
+    if last_run_raw:
+        try:
+            last_run = datetime.fromisoformat(str(last_run_raw).replace("Z", "+00:00"))
+        except ValueError:
+            last_run = datetime(2000, 1, 1, tzinfo=timezone.utc)
+    else:
+        last_run = datetime(2000, 1, 1, tzinfo=timezone.utc)
+
+    # Compute next scheduled time after last_run
+    # Find the next occurrence of weekday+hour+minute after last_run
+    candidate = last_run.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    # Advance to the correct weekday
+    days_ahead = weekday - candidate.weekday()
+    if days_ahead < 0:
+        days_ahead += 7
+    candidate += timedelta(days=days_ahead)
+    # If candidate is still <= last_run, advance by a week
+    if candidate <= last_run:
+        candidate += timedelta(weeks=1)
+
+    if now < candidate:
+        return False
+
+    # Deduplication: check if CEO_BRIEFING_<today>.md already exists
+    today_str = now.strftime("%Y-%m-%d")
+    needs_action = vault_path / "Needs_Action"
+    in_progress = vault_path / "In_Progress"
+    for d in (needs_action, in_progress):
+        if d.exists():
+            for f in d.iterdir():
+                if f.name.startswith("CEO_BRIEFING_") and today_str in f.name:
+                    return False
+
+    # Drop briefing task
+    task_name = f"CEO_BRIEFING_{today_str}.md"
+    task_path = needs_action / task_name
+    task_path.write_text(
+        f"---\ntype: ceo_briefing\nralph_loop: true\ncreated_at: \"{now.isoformat()}\"\n---\n\n"
+        f"# CEO Briefing Request\n\n"
+        f"Generate the weekly CEO briefing report for the week ending {today_str}.\n"
+        f"Aggregate data from Vault/Logs/ for the past 7 days across all domains.\n"
+        f"Write report to Vault/Plans/CEO_Briefing_{today_str}.md.\n"
+        f"When complete, move this task to Done/ and output <promise>TASK_COMPLETE</promise>.\n",
+        encoding="utf-8",
+    )
+
+    # Update last_run
+    state["last_run"] = now.isoformat()
+    state_file.write_text(json.dumps(state, indent=2), encoding="utf-8")
+
+    log_action(
+        vault_path,
+        action_type="briefing_schedule_trigger",
+        actor="orchestrator",
+        parameters={"task_file": task_name},
+        result="success",
+    )
+    print(f"[orchestrator] CEO Briefing triggered: {task_name}")
+    return True
+
+
 def invoke_claude(vault_path: Path, files: list[Path]) -> bool:
     """Invoke Claude Code to reason over files, routing each to the right skill.
 
@@ -375,6 +564,12 @@ def invoke_claude(vault_path: Path, files: list[Path]) -> bool:
     """
     routes = _route_files(vault_path, files)
     all_ok = True
+
+    # Gold: Ralph Loop tasks (T007)
+    if routes["ralph_loop"]:
+        for ralph_file in routes["ralph_loop"]:
+            ok = _invoke_claude_ralph(vault_path, [ralph_file])
+            all_ok = all_ok and ok
 
     # Email → gmail-reply skill (T032)
     if routes["email"]:
@@ -480,6 +675,22 @@ def _update_dashboard(vault_path: Path) -> None:
             f"| {k} | {v} |" for k, v in sorted(action_counts.items())
         ) or "| (none) | 0 |"
 
+        # Gold tier metrics
+        gold_types = {
+            "create_odoo_invoice": 0,
+            "confirm_odoo_invoice": 0,
+            "publish_facebook_post": 0,
+            "publish_instagram_post": 0,
+            "ralph_loop_iteration": 0,
+            "ceo_briefing_generated": 0,
+        }
+        for k in gold_types:
+            gold_types[k] = action_counts.get(k, 0)
+
+        gold_lines = "\n".join(
+            f"| {k} | {v} |" for k, v in gold_types.items()
+        )
+
         dashboard = f"""\
 # FTE Dashboard
 
@@ -502,6 +713,12 @@ def _update_dashboard(vault_path: Path) -> None:
 | Action Type | Count |
 |-------------|-------|
 {action_lines}
+
+## Gold Tier Metrics (Today)
+
+| Metric | Count |
+|--------|-------|
+{gold_lines}
 
 ---
 
@@ -587,6 +804,7 @@ def run_orchestrator(
             # Update dashboard on every cycle — T061
             if not dry_run:
                 _update_dashboard(vault_path)
+                _check_briefing_schedule(vault_path)
 
             if shutdown_requested:
                 break
