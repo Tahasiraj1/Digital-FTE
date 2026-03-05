@@ -36,6 +36,11 @@ DISPATCH_TABLE: dict[str, str] = {
     "send_whatsapp": "fte.actions.whatsapp",
     "create_calendar_event": "fte.actions.calendar",
     "publish_linkedin_post": "fte.actions.linkedin",
+    # Gold tier
+    "create_odoo_invoice": "fte.actions.odoo",
+    "confirm_odoo_invoice": "fte.actions.odoo",
+    "publish_facebook_post": "fte.actions.facebook",
+    "publish_instagram_post": "fte.actions.instagram",
 }
 
 EXPIRY_CHECK_INTERVAL = 300  # seconds
@@ -176,6 +181,15 @@ def _dispatch(approved_path: Path, vault: Path, dev_mode: bool) -> None:
         _move_to_rejected(approved_path, vault, "unknown_action_type")
         return
 
+    # Pre-dispatch guard: Instagram image_required check (T019)
+    if action_type == "publish_instagram_post":
+        if post.get("image_required") and not post.get("image_path"):
+            print(f"[executor] {approved_path.name} requires an image but none provided — rejecting")
+            _move_to_rejected(approved_path, vault, "image_required")
+            _log(vault, action_type=action_type, approved_file=str(approved_path.name),
+                 result="rejected", error_message="image_required but image_path is null")
+            return
+
     # Mark as executing (in-place frontmatter edit to prevent double-processing)
     _set_status(approved_path, "executing")
 
@@ -202,6 +216,7 @@ def _dispatch(approved_path: Path, vault: Path, dev_mode: bool) -> None:
         handler_fn(approved_path, vault)
         duration_ms = int(time.monotonic() * 1000) - start_ms
         _set_status(approved_path, "done")
+        _drop_continuation_task(vault, approved_path, action_type)
         _move_to_done(approved_path, vault)
         _log(vault, action_type=action_type, approved_file=str(approved_path.name),
              approved_at=datetime.now(timezone.utc).isoformat(),
@@ -241,6 +256,70 @@ def _move_to_rejected(src: Path, vault: Path, reason: str) -> None:
     dest = vault / "Rejected" / src.name
     dest.parent.mkdir(parents=True, exist_ok=True)
     shutil.move(str(src), str(dest))
+
+
+def _drop_continuation_task(
+    vault: Path, approved_path: Path, step_completed: str
+) -> None:
+    """Drop a continuation task into Needs_Action/ for Ralph Loop chains.
+
+    Only fires when the approved file has ralph_loop_id in its frontmatter,
+    indicating it belongs to an active Ralph Loop chain.
+    """
+    try:
+        post = frontmatter.load(str(approved_path))
+    except Exception:
+        return
+
+    ralph_loop_id = post.get("ralph_loop_id")
+    if not ralph_loop_id:
+        return
+
+    # Read chain_step — enforce chain cap
+    chain_step = int(post.get("chain_step", 0)) + 1
+    chain_cap = int(os.environ.get("RALPH_CHAIN_CAP", "3"))
+    if chain_step >= chain_cap:
+        _log(
+            vault,
+            action_type="ralph_chain_cap_reached",
+            approved_file=str(approved_path.name),
+            result="chain_capped",
+        )
+        print(f"[executor] Chain cap ({chain_cap}) reached for {approved_path.name} — no continuation.")
+        return
+
+    # Propagate chain_context from approved file
+    chain_context = post.get("chain_context", {})
+    source_task = post.get("source_task", approved_path.name)
+    next_hint = post.get("next_hint", f"Previous step '{step_completed}' completed. Continue with the next action in the chain.")
+
+    now = datetime.now(timezone.utc)
+    ts = now.strftime("%Y%m%d-%H%M%S")
+
+    # Build continuation task
+    continuation_name = f"CONTINUATION_{Path(source_task).stem}_{ts}.md"
+    continuation_path = vault / "Needs_Action" / continuation_name
+
+    content = f"""\
+---
+type: ralph_continuation
+ralph_loop: true
+ralph_loop_id: "{ralph_loop_id}"
+original_task: "{source_task}"
+step_completed: "{step_completed}"
+chain_step: {chain_step}
+chain_context: {json.dumps(chain_context) if isinstance(chain_context, dict) else '{}'}
+created_at: "{now.isoformat()}"
+---
+
+# Task Continuation
+
+Step `{step_completed}` completed.
+
+{next_hint}
+"""
+    continuation_path.write_text(content, encoding="utf-8")
+    print(f"[executor] Continuation task dropped: {continuation_name} (chain_step={chain_step})")
 
 
 # ---------------------------------------------------------------------------

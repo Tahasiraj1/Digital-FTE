@@ -214,6 +214,7 @@ See `.specify/memory/constitution.md` for code quality, testing, performance, se
 - Local filesystem (Obsidian Markdown vault at user-chosen path) (001-bronze-vault-setup)
 - Python 3.13+ (watchers, executor, LinkedIn action) | Node.js 20+ LTS (WhatsApp watcher via whatsapp-web.js) (003-silver-functional-assistant)
 - Local vault files (markdown + YAML frontmatter) | OAuth2 token JSON files at `~/.config/fte/` (003-silver-functional-assistant)
+- Python 3.13+ (all FTE Python code) | Bash (ralph-loop.sh) | Node.js (agent-browser, mcp-odoo-adv) (004-gold-autonomous-employee)
 
 ## Recent Changes
 - 001-bronze-vault-setup: Added Python 3.13+ + watchdog (filesystem events), subprocess (Claude invocation), pathlib (file operations), argparse (CLI)

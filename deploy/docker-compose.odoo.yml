@@ -1,0 +1,37 @@
+# Odoo 17 + PostgreSQL 15 — Gold Tier
+# Usage: docker compose -f deploy/docker-compose.odoo.yml up -d
+# First run: see deploy/install-gold.sh for DB init steps
+# Upgrade path: replace odoo:17 with odoo:19 when tag is available on Docker Hub
+
+services:
+  db:
+    image: postgres:15
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: odoo
+      POSTGRES_PASSWORD: odoo
+      POSTGRES_DB: postgres
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  odoo:
+    image: odoo:17
+    restart: unless-stopped
+    depends_on:
+      - db
+    environment:
+      HOST: db
+      USER: odoo
+      PASSWORD: odoo
+    ports:
+      - "8069:8069"
+      - "8072:8072"
+    volumes:
+      - odoodata:/var/lib/odoo
+      - ./odoo-addons:/mnt/extra-addons
+
+volumes:
+  pgdata:
+  odoodata:

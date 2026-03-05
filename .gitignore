@@ -27,6 +27,7 @@ uv.lock
 Thumbs.db
 
 # Vault runtime (not committed)
+Vault/
 *.lock
 Logs/
 
@@ -45,6 +46,12 @@ watcher-state.json
 credentials.json
 client_secrets.json
 *_token.json
+
+# Gold tier — Docker volumes (local only)
+deploy/odoo-addons/
+
+# Gold tier — agent-browser sessions (never commit)
+.agent-browser/
 
 # Specify
 .specify/scripts/

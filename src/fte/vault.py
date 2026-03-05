@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -45,6 +46,23 @@ All outbound actions require explicit human approval. No auto-approve thresholds
 ### General Rules
 - Never execute an action without an approved file in `Vault/Approved/`
 - All actions are logged to `Vault/Logs/YYYY-MM-DD.json`
+
+### Odoo / Financial Rules (Gold Tier)
+- All Odoo financial actions (create/confirm invoice) ALWAYS require human approval
+- `requires_human_review: true` is mandatory on every Odoo approval file
+- Never auto-confirm an invoice — always create a separate confirm approval
+
+### Facebook & Instagram Rules (Gold Tier)
+- All social posts require approval. Maximum 2 posts per day per platform.
+- Posts must not contain pricing, legal commitments, or financial claims without `requires_human_review` flag
+- Session expiry creates a SYSTEM_ alert — do not retry until re-authenticated
+
+### Ralph Loop Rules (Gold Tier)
+- Maximum 10 iterations per loop (configurable via RALPH_MAX_ITERATIONS)
+- Cross-domain chain cap: 3 downstream actions (configurable via RALPH_CHAIN_CAP)
+- Every step that creates an outbound action must go through Pending_Approval/
+- Use `<promise>AWAITING_APPROVAL</promise>` to pause the loop at approval gates
+- Use `<promise>TASK_COMPLETE</promise>` to end the loop cleanly
 
 ## Auto-Approve Thresholds
 
@@ -104,6 +122,25 @@ def init_vault(vault_path: str | Path) -> list[tuple[str, str]]:
     else:
         dashboard.write_text(DASHBOARD_CONTENT, encoding="utf-8")
         results.append(("Dashboard.md", "created"))
+
+    # Create briefing_state.json (Gold tier — CEO Briefing scheduler)
+    briefing_state = vault / "briefing_state.json"
+    if briefing_state.exists():
+        results.append(("briefing_state.json", "exists"))
+    else:
+        briefing_state.write_text(
+            json.dumps(
+                {
+                    "last_run": None,
+                    "schedule_utc_weekday": 6,
+                    "schedule_utc_hour": 18,
+                    "schedule_utc_minute": 0,
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        results.append(("briefing_state.json", "created"))
 
     log_action(
         vault,
